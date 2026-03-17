@@ -1,0 +1,379 @@
+// ===========================================
+// NexusWA — Database Schema (Prisma)
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// المستأجرون — الشركات المشتركة في المنصة
+// ============================================
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  planId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan       Plan?              @relation(fields: [planId], references: [id])
+  users      User[]
+  apiKeys    ApiKey[]
+  instances  WhatsAppInstance[]
+  messages   Message[]
+  webhooks   Webhook[]
+  usageLogs  UsageLog[]
+  contacts   Contact[]
+  labels     Label[]
+  templates  Template[]
+  autoReplies AutoReplyRule[]
+  campaigns  Campaign[]
+
+  @@map("tenants")
+}
+
+// ============================================
+// المستخدمون — مستخدمي كل شركة
+// ============================================
+model User {
+  id        String   @id @default(uuid())
+  tenantId  String
+  email     String
+  password  String
+  name      String
+  role      UserRole @default(MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ============================================
+// خطط الاشتراك
+// ============================================
+model Plan {
+  id               String  @id @default(uuid())
+  name             String
+  slug             String  @unique
+  maxInstances     Int
+  maxMessagesPerDay Int?   // null = غير محدود
+  maxContacts      Int?
+  priceMonthly     Decimal @db.Decimal(10, 2)
+  features         Json    @default("{}")
+  isActive         Boolean @default(true)
+  sortOrder        Int     @default(0)
+  createdAt        DateTime @default(now())
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// ============================================
+// مفاتيح API
+// ============================================
+model ApiKey {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  keyHash   String   @unique
+  keyPrefix String   // أول 8 أحرف للعرض
+  isActive  Boolean  @default(true)
+  lastUsedAt DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// ============================================
+// أرقام واتساب المربوطة
+// ============================================
+model WhatsAppInstance {
+  id              String         @id @default(uuid())
+  tenantId        String
+  name            String
+  phoneNumber     String?
+  status          InstanceStatus @default(DISCONNECTED)
+  qrCode          String?        @db.Text
+  sessionData     Json?
+  lastConnectedAt DateTime?
+  firstConnectedAt DateTime?     // لحساب عمر الرقم (Warm-Up)
+  totalMessagesSent Int          @default(0)
+  dailyMessagesSent Int          @default(0)
+  dailyResetAt    DateTime?
+  riskLevel       RiskLevel      @default(GREEN)
+  warmUpCompleted Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@map("whatsapp_instances")
+}
+
+enum InstanceStatus {
+  DISCONNECTED
+  QR_PENDING
+  CONNECTING
+  CONNECTED
+  BANNED
+}
+
+enum RiskLevel {
+  GREEN
+  YELLOW
+  RED
+}
+
+// ============================================
+// سجل الرسائل
+// ============================================
+model Message {
+  id          String        @id @default(uuid())
+  tenantId    String
+  instanceId  String
+  direction   MessageDirection
+  recipient   String
+  messageType MessageType
+  content     Json
+  status      MessageStatus @default(QUEUED)
+  externalId  String?       // معرف من النظام الخارجي
+  campaignId  String?       // ربط بالحملة
+  errorReason String?
+  scheduledAt DateTime?     // الإرسال المجدول
+  createdAt   DateTime      @default(now())
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instance WhatsAppInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  campaign Campaign?        @relation(fields: [campaignId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([instanceId, status])
+  @@index([campaignId])
+  @@index([scheduledAt, status])
+  @@map("messages")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+  CONTACT
+  STICKER
+}
+
+enum MessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SCHEDULED
+  CANCELLED
+}
+
+// ============================================
+// Webhooks مسجلة
+// ============================================
+model Webhook {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  url       String
+  events    String[] // message.received, message.sent, etc.
+  secret    String   // للتوقيع الرقمي HMAC
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+// ============================================
+// سجل الاستخدام اليومي
+// ============================================
+model UsageLog {
+  id                String   @id @default(uuid())
+  tenantId          String
+  date              DateTime @db.Date
+  messagesSent      Int      @default(0)
+  messagesReceived  Int      @default(0)
+  mediaStorageBytes BigInt   @default(0)
+  createdAt         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@map("usage_logs")
+}
+
+// ============================================
+// جهات الاتصال
+// ============================================
+model Contact {
+  id        String   @id @default(uuid())
+  tenantId  String
+  phone     String
+  name      String?
+  email     String?
+  company   String?
+  notes     String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  labels ContactLabel[]
+
+  @@unique([tenantId, phone])
+  @@map("contacts")
+}
+
+// ============================================
+// تصنيفات جهات الاتصال
+// ============================================
+model Label {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts ContactLabel[]
+
+  @@unique([tenantId, name])
+  @@map("labels")
+}
+
+model ContactLabel {
+  contactId String
+  labelId   String
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label   Label   @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, labelId])
+  @@map("contact_labels")
+}
+
+// ============================================
+// قوالب الرسائل
+// ============================================
+model Template {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  content   String   @db.Text  // يدعم {{name}} {{company}} إلخ
+  category  String   @default("general")
+  language  String   @default("ar")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@map("templates")
+}
+
+// ============================================
+// قواعد الرد التلقائي
+// ============================================
+model AutoReplyRule {
+  id         String   @id @default(uuid())
+  tenantId   String
+  instanceId String?  // null = كل الأرقام
+  trigger    String   // كلمة مفتاحية أو regex
+  matchType  MatchType @default(CONTAINS)
+  response   String   @db.Text
+  templateId String?
+  isActive   Boolean  @default(true)
+  priority   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("auto_reply_rules")
+}
+
+enum MatchType {
+  EXACT
+  CONTAINS
+  STARTS_WITH
+  REGEX
+}
+
+// ============================================
+// الحملات
+// ============================================
+model Campaign {
+  id          String         @id @default(uuid())
+  tenantId    String
+  instanceId  String
+  name        String
+  status      CampaignStatus @default(DRAFT)
+  content     Json           // نص + نوع الرسالة
+  templateId  String?
+  targetType  String         @default("manual") // manual, label, all
+  targetData  Json           @default("[]")     // أرقام أو label IDs
+  totalCount  Int            @default(0)
+  sentCount   Int            @default(0)
+  failedCount Int            @default(0)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@map("campaigns")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+

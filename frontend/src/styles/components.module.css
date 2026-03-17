@@ -1,0 +1,66 @@
+/* صفحات المصادقة */
+.authContainer { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+.authCard { display: flex; flex-direction: column; justify-content: center; padding: 48px; max-width: 480px; margin: 0 auto; width: 100%; }
+.authHeader { margin-bottom: 32px; }
+.authLogo { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.logoIcon { font-size: 2rem; background: linear-gradient(135deg, var(--color-primary), #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logoText { font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--color-primary), #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.authHeader h1 { font-size: 1.8rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.authHeader p { color: var(--text-secondary); font-size: 0.95rem; }
+.authForm { display: flex; flex-direction: column; gap: 20px; }
+.authError { padding: 12px 16px; background: var(--color-danger-light); color: var(--color-danger); border-radius: var(--border-radius-sm); font-size: 0.85rem; font-weight: 500; }
+.authFooter { margin-top: 24px; text-align: center; color: var(--text-secondary); font-size: 0.9rem; }
+.authBg { background: linear-gradient(135deg, #4f46e5, #7c3aed, #6366f1); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.authBg::before { content: ''; position: absolute; width: 400px; height: 400px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; top: -100px; right: -100px; }
+.authBg::after { content: ''; position: absolute; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; bottom: -50px; left: -50px; }
+.authBgContent { color: white; text-align: center; z-index: 1; padding: 48px; }
+.authBgContent h2 { font-size: 2.5rem; font-weight: 800; margin-bottom: 12px; }
+.authBgContent p { font-size: 1.1rem; opacity: 0.9; margin-bottom: 40px; }
+.authFeatures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.authFeature { padding: 16px; background: rgba(255, 255, 255, 0.15); border-radius: 12px; backdrop-filter: blur(8px); font-size: 0.95rem; font-weight: 500; }
+@media (max-width: 900px) { .authContainer { grid-template-columns: 1fr; } .authBg { display: none; } .authCard { padding: 24px; } }
+
+/* الداشبورد */
+.dashboardLayout { display: flex; min-height: 100vh; }
+.sidebar { width: var(--sidebar-width); background: var(--bg-sidebar); display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; z-index: 100; transition: transform 0.3s ease; }
+.sidebarHeader { padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.sidebarLogo { font-size: 1.3rem; font-weight: 800; color: white; background: linear-gradient(135deg, #818cf8, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.sidebarNav { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.sidebarLink { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 8px; color: var(--text-sidebar); font-size: 0.9rem; font-weight: 500; transition: var(--transition); text-decoration: none; }
+.sidebarLink:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+.sidebarLinkActive { background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.2)); color: white; font-weight: 600; }
+.sidebarLinkIcon { font-size: 1.1rem; }
+.sidebarFooter { padding: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.sidebarUser { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 8px; }
+.sidebarUserAvatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.9rem; }
+.sidebarUserName { color: white; font-size: 0.85rem; font-weight: 600; }
+.sidebarUserRole { color: var(--text-sidebar); font-size: 0.75rem; }
+.mainContent { flex: 1; margin-inline-start: var(--sidebar-width); min-height: 100vh; }
+.topHeader { height: var(--header-height); display: flex; align-items: center; padding: 0 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-primary); position: sticky; top: 0; z-index: 50; }
+.menuBtn { display: none; background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-primary); }
+.headerSpacer { flex: 1; }
+.headerActions { display: flex; gap: 8px; }
+.pageContent { padding: 24px; max-width: 1200px; }
+.sidebarOverlay { display: none; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  [dir='rtl'] .sidebar { transform: translateX(100%); }
+  .sidebarOpen { transform: translateX(0) !important; }
+  .mainContent { margin-inline-start: 0; }
+  .menuBtn { display: block; }
+  .sidebarOverlay { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 99; }
+}
+
+/* الداشبورد الرئيسي */
+.pageHeader { margin-bottom: 24px; }
+.pageHeader h1 { font-size: 1.6rem; font-weight: 700; }
+.statsGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.quickSteps { display: flex; flex-direction: column; gap: 16px; }
+.quickStep { display: flex; align-items: flex-start; gap: 16px; padding: 16px; background: var(--bg-secondary); border-radius: var(--border-radius-sm); }
+.stepNumber { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, var(--color-primary), #8b5cf6); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; }
+.stepContent h4 { font-size: 0.9rem; margin-bottom: 4px; }
+.stepContent p { font-size: 0.8rem; color: var(--text-secondary); }
+
+/* Modal */
+.modalOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
+.modal { padding: 32px; text-align: center; max-width: 400px; width: 90%; }
