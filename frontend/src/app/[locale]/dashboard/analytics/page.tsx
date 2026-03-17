@@ -18,10 +18,19 @@ export default function AnalyticsPage() {
     setLoading(false);
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', opacity: 0.5 }}>جاري التحميل...</div>;
+  const handleExport = (type: 'contacts' | 'messages') => {
+    const token = localStorage.getItem('nexuswa_token');
+    const baseUrl = 'http://localhost:3000/api/v1';
+    window.open(`${baseUrl}/analytics/export/${type}`, '_blank');
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', opacity: 0.5 }}>⏳ جاري التحميل...</div>;
   if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>لا توجد بيانات</div>;
 
-  const { overview, period: periodData, instanceStats, recentCampaigns } = data;
+  const { overview, period: periodData, dailyStats, instanceStats, recentCampaigns } = data;
+
+  // حساب max للـ bar chart
+  const maxDaily = Math.max(...(dailyStats || []).map((d: any) => d.sent || 0), 1);
 
   return (
     <div>
@@ -72,14 +81,39 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* رسم بياني يومي — Bar Chart بـ CSS */}
+      {dailyStats && dailyStats.length > 0 && (
+        <div className="card" style={{ padding: 20, marginBottom: 24 }}>
+          <h3 style={{ marginBottom: 16, fontSize: 16 }}>📊 الرسائل المُرسلة يومياً</h3>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120 }}>
+            {dailyStats.map((d: any, i: number) => {
+              const h = Math.max((d.sent / maxDaily) * 100, 4);
+              const dateStr = new Date(d.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>{d.sent}</span>
+                  <div style={{
+                    width: '100%', height: `${h}%`, borderRadius: '4px 4px 0 0',
+                    background: 'linear-gradient(180deg, var(--color-primary), var(--color-primary-hover))',
+                    transition: 'height 0.5s ease',
+                    minHeight: 4,
+                  }} />
+                  <span style={{ fontSize: 9, opacity: 0.5, whiteSpace: 'nowrap' }}>{dateStr}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         {/* أداء الأرقام */}
         <div className="card" style={{ padding: 20 }}>
           <h3 style={{ marginBottom: 16, fontSize: 16 }}>📱 أداء الأرقام</h3>
           {instanceStats.length === 0 ? (
             <p style={{ opacity: 0.5, textAlign: 'center', padding: 20 }}>لا توجد أرقام</p>
           ) : instanceStats.map((inst: any) => (
-            <div key={inst.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+            <div key={inst.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{inst.name}</div>
                 <div style={{ fontSize: 12, opacity: 0.6, direction: 'ltr', display: 'inline' }}>{inst.phone || '—'}</div>
@@ -105,7 +139,7 @@ export default function AnalyticsPage() {
           ) : recentCampaigns.map((c: any) => {
             const progress = c.totalCount > 0 ? Math.round(((c.sentCount + c.failedCount) / c.totalCount) * 100) : 0;
             return (
-              <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+              <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
                   <span style={{ fontSize: 12, opacity: 0.6 }}>{progress}%</span>
@@ -123,6 +157,20 @@ export default function AnalyticsPage() {
             );
           })}
         </div>
+      </div>
+
+      {/* أزرار التصدير */}
+      <div className="card" style={{ padding: 20 }}>
+        <h3 style={{ marginBottom: 16, fontSize: 16 }}>📥 تصدير البيانات</h3>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => handleExport('contacts')}>
+            👥 تصدير جهات الاتصال (CSV)
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => handleExport('messages')}>
+            📨 تصدير الرسائل (CSV)
+          </button>
+        </div>
+        <p style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}>💡 الملفات بتنسيق CSV متوافق مع Excel مع دعم اللغة العربية</p>
       </div>
     </div>
   );

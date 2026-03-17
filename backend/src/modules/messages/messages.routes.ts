@@ -15,16 +15,37 @@ const logger = createModuleLogger('messages');
 // ============================================
 // مخططات التحقق
 // ============================================
+const messageTypes = z.enum(['text', 'image', 'video', 'audio', 'document', 'location', 'buttons', 'list']);
+
 const sendMessageSchema = z.object({
   instanceId: z.string().uuid('معرف الجلسة غير صالح'),
   to: z.string().min(10, 'رقم الهاتف مطلوب'),
-  type: z.enum(['text', 'image', 'document']).default('text'),
+  type: messageTypes.default('text'),
   content: z.object({
     body: z.string().optional(),
     mediaUrl: z.string().url().optional(),
     caption: z.string().optional(),
     filename: z.string().optional(),
     mimetype: z.string().optional(),
+    // Location
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    locationName: z.string().optional(),
+    // Audio
+    ptt: z.boolean().optional(),
+    // Buttons
+    buttons: z.array(z.object({ id: z.string(), text: z.string() })).optional(),
+    footer: z.string().optional(),
+    // List
+    buttonText: z.string().optional(),
+    sections: z.array(z.object({
+      title: z.string(),
+      rows: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().optional(),
+      })),
+    })).optional(),
   }),
   externalId: z.string().optional(),
 });
@@ -32,13 +53,28 @@ const sendMessageSchema = z.object({
 const sendBulkSchema = z.object({
   instanceId: z.string().uuid('معرف الجلسة غير صالح'),
   recipients: z.array(z.string().min(10)).min(1, 'المستلمين مطلوبين'),
-  type: z.enum(['text', 'image', 'document']).default('text'),
+  type: messageTypes.default('text'),
   content: z.object({
     body: z.string().optional(),
     mediaUrl: z.string().url().optional(),
     caption: z.string().optional(),
     filename: z.string().optional(),
     mimetype: z.string().optional(),
+    ptt: z.boolean().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    locationName: z.string().optional(),
+    buttons: z.array(z.object({ id: z.string(), text: z.string() })).optional(),
+    footer: z.string().optional(),
+    buttonText: z.string().optional(),
+    sections: z.array(z.object({
+      title: z.string(),
+      rows: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string().optional(),
+      })),
+    })).optional(),
   }),
 });
 
@@ -66,6 +102,14 @@ export const messageRoutes = async (app: FastifyInstance) => {
 
       // التحقق من حد الرسائل اليومي
       await checkDailyLimit(tenantId);
+
+      // التحقق من القائمة السوداء (Opt-Out)
+      const isBlocked = await prisma.blacklist.findUnique({
+        where: { tenantId_phone: { tenantId, phone: body.to } },
+      });
+      if (isBlocked) {
+        throw new ValidationError(`الرقم ${body.to} في القائمة السوداء ولا يمكن إرسال رسائل إليه.`);
+      }
 
       // التحقق من المحتوى قبل الحفظ
       if (body.type === 'text' && !body.content.body) {
@@ -294,6 +338,37 @@ async function updateUsageLog(tenantId: string) {
   });
 }
 
+async function sendByType(instanceId: string, to: string, type: string, content: any) {
+  switch (type) {
+    case 'text':
+      await whatsappManager.sendTextMessage(instanceId, to, content.body);
+      break;
+    case 'image':
+      await whatsappManager.sendImageMessage(instanceId, to, content.mediaUrl, content.caption);
+      break;
+    case 'video':
+      await whatsappManager.sendVideoMessage(instanceId, to, content.mediaUrl, content.caption);
+      break;
+    case 'audio':
+      await whatsappManager.sendAudioMessage(instanceId, to, content.mediaUrl, content.ptt);
+      break;
+    case 'document':
+      await whatsappManager.sendDocumentMessage(instanceId, to, content.mediaUrl, content.filename || 'document', content.mimetype || 'application/pdf');
+      break;
+    case 'location':
+      await whatsappManager.sendLocationMessage(instanceId, to, content.latitude, content.longitude, content.locationName);
+      break;
+    case 'buttons':
+      await whatsappManager.sendButtonMessage(instanceId, to, content.body, content.buttons, content.footer);
+      break;
+    case 'list':
+      await whatsappManager.sendListMessage(instanceId, to, content.body, content.buttonText, content.sections, content.footer);
+      break;
+    default:
+      throw new Error(`نوع الرسالة غير مدعوم: ${type}`);
+  }
+}
+
 async function processMessage(
   messageId: string,
   instanceId: string,
@@ -308,17 +383,7 @@ async function processMessage(
       data: { status: 'SENDING' },
     });
 
-    switch (type) {
-      case 'text':
-        await whatsappManager.sendTextMessage(instanceId, to, content.body);
-        break;
-      case 'image':
-        await whatsappManager.sendImageMessage(instanceId, to, content.mediaUrl, content.caption);
-        break;
-      case 'document':
-        await whatsappManager.sendDocumentMessage(instanceId, to, content.mediaUrl, content.filename || 'document', content.mimetype || 'application/pdf');
-        break;
-    }
+    await sendByType(instanceId, to, type, content);
 
     await prisma.message.update({
       where: { id: messageId },
@@ -326,7 +391,7 @@ async function processMessage(
     });
 
     await updateUsageLog(tenantId);
-    logger.info({ messageId, to }, '📤 تم إرسال الرسالة بنجاح');
+    logger.info({ messageId, to, type }, '📤 تم إرسال الرسالة بنجاح');
   } catch (error: any) {
     const errorMsg = error.message || 'خطأ غير معروف';
     logger.error({ messageId, error: errorMsg }, '❌ فشل إرسال الرسالة');
@@ -350,30 +415,12 @@ async function processBulkMessages(
         data: { status: 'SENDING' },
       });
 
-      switch (type) {
-        case 'text':
-          await whatsappManager.sendTextMessage(
-            instanceId,
-            msg.recipient,
-            content.body
-          );
-          break;
-        case 'image':
-          await whatsappManager.sendImageMessage(
-            instanceId,
-            msg.recipient,
-            content.mediaUrl,
-            content.caption
-          );
-          break;
-      }
+      await sendByType(instanceId, msg.recipient, type, content);
 
       await prisma.message.update({
         where: { id: msg.id },
         data: { status: 'SENT', sentAt: new Date() },
       });
-
-      // Anti-Ban: التأخير يتم داخل sendTextMessage تلقائياً
     } catch (error: any) {
       await prisma.message.update({
         where: { id: msg.id },

@@ -36,6 +36,8 @@ model Tenant {
   templates  Template[]
   autoReplies AutoReplyRule[]
   campaigns  Campaign[]
+  conversations Conversation[]
+  blacklist  Blacklist[]
 
   @@map("tenants")
 }
@@ -193,6 +195,8 @@ enum MessageType {
   LOCATION
   CONTACT
   STICKER
+  BUTTONS
+  LIST
 }
 
 enum MessageStatus {
@@ -377,3 +381,67 @@ enum CampaignStatus {
   CANCELLED
 }
 
+// ============================================
+// المحادثات — Shared Inbox
+// ============================================
+model Conversation {
+  id           String             @id @default(uuid())
+  tenantId     String
+  instanceId   String
+  contactPhone String             // رقم العميل
+  contactName  String?
+  status       ConversationStatus @default(OPEN)
+  assignedTo   String?            // user ID
+  lastMessage  String?            @db.Text
+  lastMessageAt DateTime?
+  unreadCount  Int                @default(0)
+  metadata     Json               @default("{}")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notes  ConversationNote[]
+
+  @@unique([tenantId, instanceId, contactPhone])
+  @@index([tenantId, status])
+  @@index([tenantId, assignedTo])
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+// ============================================
+// ملاحظات المحادثات الداخلية
+// ============================================
+model ConversationNote {
+  id             String   @id @default(uuid())
+  conversationId String
+  userId         String
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_notes")
+}
+
+// ============================================
+// القائمة السوداء — Opt-Out
+// ============================================
+model Blacklist {
+  id        String   @id @default(uuid())
+  tenantId  String
+  phone     String
+  reason    String?  // STOP, manual, spam report
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, phone])
+  @@map("blacklist")
+}

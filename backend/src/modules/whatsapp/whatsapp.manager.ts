@@ -237,13 +237,55 @@ class WhatsAppManager extends EventEmitter {
               },
             });
 
+            // === إنشاء/تحديث محادثة (Shared Inbox) ===
+            try {
+              const contentText = (messageContent.content as any)?.body || `[${messageContent.type}]`;
+              await prisma.conversation.upsert({
+                where: { tenantId_instanceId_contactPhone: { tenantId, instanceId, contactPhone: sender } },
+                update: {
+                  lastMessage: contentText.substring(0, 200),
+                  lastMessageAt: new Date(),
+                  unreadCount: { increment: 1 },
+                  status: 'OPEN',
+                },
+                create: {
+                  tenantId,
+                  instanceId,
+                  contactPhone: sender,
+                  contactName: msg.pushName || null,
+                  lastMessage: contentText.substring(0, 200),
+                  lastMessageAt: new Date(),
+                  unreadCount: 1,
+                  status: 'OPEN',
+                },
+              });
+            } catch (convErr) {
+              logger.debug({ instanceId, sender }, 'تجاهل خطأ محادثة');
+            }
+
             this.emit('message.received', {
               instanceId, tenantId, from: sender, ...messageContent,
             });
 
-            // === الرد التلقائي ===
+            // === Opt-Out: إذا أرسل STOP ===
             if (messageContent.type === 'TEXT') {
-              const incomingText = (messageContent.content as any)?.body || '';
+              const incomingText = ((messageContent.content as any)?.body || '').trim().toLowerCase();
+              
+              if (incomingText === 'stop' || incomingText === 'إلغاء' || incomingText === 'الغاء') {
+                try {
+                  await prisma.blacklist.upsert({
+                    where: { tenantId_phone: { tenantId, phone: sender } },
+                    update: {},
+                    create: { tenantId, phone: sender, reason: 'STOP' },
+                  });
+                  // رد تلقائي بتأكيد الإلغاء
+                  await this.sendTextMessage(instanceId, sender, 'تم إلغاء اشتراكك بنجاح. لن تتلقى رسائل أخرى. ✅');
+                  logger.info({ instanceId, sender }, '🚫 Opt-Out: تم إلغاء الاشتراك بواسطة STOP');
+                } catch (optErr) {
+                  logger.error({ instanceId, sender, err: (optErr as any).message }, '❌ خطأ في Opt-Out');
+                }
+              }
+
               if (incomingText) {
                 this.processAutoReply(instanceId, tenantId, sender, incomingText)
                   .catch(err => logger.error({ instanceId, err: err.message }, '❌ خطأ في الرد التلقائي'));
@@ -317,7 +359,7 @@ class WhatsAppManager extends EventEmitter {
   }
 
   // ============================================
-  // إرسال صورة
+  // إرسال صورة (مع Anti-Ban)
   // ============================================
   async sendImageMessage(
     instanceId: string,
@@ -326,24 +368,83 @@ class WhatsAppManager extends EventEmitter {
     caption?: string
   ): Promise<any> {
     const instance = this.instances.get(instanceId);
-    if (!instance) {
-      throw new Error('الجلسة غير متصلة');
-    }
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
 
     const jid = formatPhoneNumber(to);
-    await randomDelay(1500, 4000);
+    await delay(check.delay);
 
     const result = await instance.socket.sendMessage(jid, {
       image: { url: imageUrl },
-      caption,
+      caption: caption ? antiBanService.variateContent(caption) : undefined,
     });
 
+    await antiBanService.recordMessageSent(instanceId);
     logger.info({ instanceId, to }, '📤 تم إرسال صورة');
     return result;
   }
 
   // ============================================
-  // إرسال مستند
+  // إرسال فيديو (مع Anti-Ban)
+  // ============================================
+  async sendVideoMessage(
+    instanceId: string,
+    to: string,
+    videoUrl: string,
+    caption?: string
+  ): Promise<any> {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
+
+    const jid = formatPhoneNumber(to);
+    await delay(check.delay);
+
+    const result = await instance.socket.sendMessage(jid, {
+      video: { url: videoUrl },
+      caption: caption ? antiBanService.variateContent(caption) : undefined,
+    });
+
+    await antiBanService.recordMessageSent(instanceId);
+    logger.info({ instanceId, to }, '📤 تم إرسال فيديو');
+    return result;
+  }
+
+  // ============================================
+  // إرسال صوت (مع Anti-Ban)
+  // ============================================
+  async sendAudioMessage(
+    instanceId: string,
+    to: string,
+    audioUrl: string,
+    ptt: boolean = false
+  ): Promise<any> {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
+
+    const jid = formatPhoneNumber(to);
+    await delay(check.delay);
+
+    const result = await instance.socket.sendMessage(jid, {
+      audio: { url: audioUrl },
+      ptt,
+      mimetype: 'audio/mpeg',
+    });
+
+    await antiBanService.recordMessageSent(instanceId);
+    logger.info({ instanceId, to, ptt }, '📤 تم إرسال صوت');
+    return result;
+  }
+
+  // ============================================
+  // إرسال مستند (مع Anti-Ban)
   // ============================================
   async sendDocumentMessage(
     instanceId: string,
@@ -353,12 +454,13 @@ class WhatsAppManager extends EventEmitter {
     mimetype: string
   ): Promise<any> {
     const instance = this.instances.get(instanceId);
-    if (!instance) {
-      throw new Error('الجلسة غير متصلة');
-    }
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
 
     const jid = formatPhoneNumber(to);
-    await randomDelay(1500, 4000);
+    await delay(check.delay);
 
     const result = await instance.socket.sendMessage(jid, {
       document: { url: documentUrl },
@@ -366,7 +468,104 @@ class WhatsAppManager extends EventEmitter {
       mimetype,
     });
 
+    await antiBanService.recordMessageSent(instanceId);
     logger.info({ instanceId, to }, '📤 تم إرسال مستند');
+    return result;
+  }
+
+  // ============================================
+  // إرسال موقع
+  // ============================================
+  async sendLocationMessage(
+    instanceId: string,
+    to: string,
+    latitude: number,
+    longitude: number,
+    name?: string
+  ): Promise<any> {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const jid = formatPhoneNumber(to);
+    await randomDelay(1000, 2000);
+
+    const result = await instance.socket.sendMessage(jid, {
+      location: { degreesLatitude: latitude, degreesLongitude: longitude, name },
+    });
+
+    logger.info({ instanceId, to }, '📤 تم إرسال موقع');
+    return result;
+  }
+
+  // ============================================
+  // إرسال رسالة بأزرار تفاعلية
+  // ============================================
+  async sendButtonMessage(
+    instanceId: string,
+    to: string,
+    body: string,
+    buttons: { id: string; text: string }[],
+    footer?: string
+  ): Promise<any> {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
+
+    const jid = formatPhoneNumber(to);
+    await delay(check.delay);
+
+    const buttonMsg: any = {
+      text: antiBanService.variateContent(body),
+      footer,
+      buttons: buttons.map((b, i) => ({
+        buttonId: b.id || `btn_${i}`,
+        buttonText: { displayText: b.text },
+        type: 1,
+      })),
+      headerType: 1,
+    };
+
+    const result = await instance.socket.sendMessage(jid, buttonMsg);
+
+    await antiBanService.recordMessageSent(instanceId);
+    logger.info({ instanceId, to, buttonsCount: buttons.length }, '📤 تم إرسال رسالة بأزرار');
+    return result;
+  }
+
+  // ============================================
+  // إرسال قائمة تفاعلية (List Message)
+  // ============================================
+  async sendListMessage(
+    instanceId: string,
+    to: string,
+    body: string,
+    buttonText: string,
+    sections: { title: string; rows: { id: string; title: string; description?: string }[] }[],
+    footer?: string
+  ): Promise<any> {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error('الجلسة غير متصلة');
+
+    const check = await antiBanService.canSendMessage(instanceId);
+    if (!check.allowed) throw new Error(check.reason || 'تم الوصول للحد المسموح');
+
+    const jid = formatPhoneNumber(to);
+    await delay(check.delay);
+
+    const listMsg: any = {
+      text: antiBanService.variateContent(body),
+      footer,
+      title: body,
+      buttonText,
+      sections,
+    };
+
+    const result = await instance.socket.sendMessage(jid, listMsg);
+
+    await antiBanService.recordMessageSent(instanceId);
+    logger.info({ instanceId, to, sectionsCount: sections.length }, '📤 تم إرسال قائمة');
     return result;
   }
 

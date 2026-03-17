@@ -127,4 +127,50 @@ export const analyticsRoutes = async (app: FastifyInstance) => {
       },
     });
   });
+
+  // ============================================
+  // تصدير جهات الاتصال CSV
+  // ============================================
+  app.get('/export/contacts', { preHandler: [hybridAuthGuard] }, async (request, reply) => {
+    const tenantId = request.tenantId!;
+    const contacts = await prisma.contact.findMany({
+      where: { tenantId },
+      select: { name: true, phone: true, email: true, company: true, notes: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const header = 'الاسم,رقم الهاتف,البريد,الشركة,ملاحظات,تاريخ الإنشاء\n';
+    const rows = contacts.map(c =>
+      `"${c.name || ''}","${c.phone}","${c.email || ''}","${c.company || ''}","${(c.notes || '').replace(/"/g, '""')}","${new Date(c.createdAt).toLocaleDateString('ar-EG')}"`
+    ).join('\n');
+
+    const bom = '\uFEFF'; // UTF-8 BOM for Excel Arabic support
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename=contacts_${new Date().toISOString().split('T')[0]}.csv`);
+    return reply.send(bom + header + rows);
+  });
+
+  // ============================================
+  // تصدير الرسائل CSV
+  // ============================================
+  app.get('/export/messages', { preHandler: [hybridAuthGuard] }, async (request, reply) => {
+    const tenantId = request.tenantId!;
+    const messages = await prisma.message.findMany({
+      where: { tenantId },
+      select: { direction: true, recipient: true, messageType: true, content: true, status: true, createdAt: true, sentAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+
+    const header = 'الاتجاه,المستلم,النوع,المحتوى,الحالة,تاريخ الإنشاء,تاريخ الإرسال\n';
+    const rows = messages.map(m => {
+      const body = (m.content as any)?.body || (m.content as any)?.caption || `[${m.messageType}]`;
+      return `"${m.direction === 'OUTBOUND' ? 'صادر' : 'وارد'}","${m.recipient}","${m.messageType}","${body.replace(/"/g, '""')}","${m.status}","${new Date(m.createdAt).toLocaleString('ar-EG')}","${m.sentAt ? new Date(m.sentAt).toLocaleString('ar-EG') : ''}"`;
+    }).join('\n');
+
+    const bom = '\uFEFF';
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename=messages_${new Date().toISOString().split('T')[0]}.csv`);
+    return reply.send(bom + header + rows);
+  });
 };

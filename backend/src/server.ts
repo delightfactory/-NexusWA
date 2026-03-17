@@ -27,6 +27,8 @@ import { autoReplyRoutes } from './modules/auto-reply/auto-reply.routes';
 import { campaignRoutes } from './modules/campaigns/campaigns.routes';
 import { analyticsRoutes } from './modules/analytics/analytics.routes';
 import { schedulerRoutes } from './modules/scheduler/scheduler.routes';
+import { conversationRoutes } from './modules/conversations/conversation.routes';
+import { blacklistRoutes } from './modules/blacklist/blacklist.routes';
 
 const logger = createModuleLogger('server');
 
@@ -124,6 +126,8 @@ async function registerRoutes() {
   app.register(campaignRoutes, { prefix: '/api/v1/campaigns' });
   app.register(analyticsRoutes, { prefix: '/api/v1/analytics' });
   app.register(schedulerRoutes, { prefix: '/api/v1/scheduled' });
+  app.register(conversationRoutes, { prefix: '/api/v1/conversations' });
+  app.register(blacklistRoutes, { prefix: '/api/v1/blacklist' });
 }
 
 // ============================================

@@ -295,6 +295,20 @@ class ApiClient {
     return this.request<any>(`/analytics${query ? '?' + query : ''}`);
   }
 
+  // تصدير CSV
+  exportContactsUrl() {
+    return `${API_BASE}/analytics/export/contacts`;
+  }
+
+  exportMessagesUrl() {
+    return `${API_BASE}/analytics/export/messages`;
+  }
+
+  // إرسال جماعي
+  async sendBulkMessages(body: any) {
+    return this.request<any>('/messages/send-bulk', { method: 'POST', body: JSON.stringify(body) });
+  }
+
   // الرسائل المجدولة
   async listScheduled() {
     return this.request<any[]>('/scheduled');

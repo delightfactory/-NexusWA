@@ -10,12 +10,14 @@ const navItems = [
   { key: 'dashboard', path: '/dashboard', icon: '📊' },
   { key: 'instances', path: '/dashboard/instances', icon: '📱' },
   { key: 'messages', path: '/dashboard/messages', icon: '📨' },
+  { key: 'conversations', path: '/dashboard/conversations', icon: '💬' },
   { key: 'contacts', path: '/dashboard/contacts', icon: '👥' },
   { key: 'templates', path: '/dashboard/templates', icon: '📝' },
   { key: 'campaigns', path: '/dashboard/campaigns', icon: '📢' },
   { key: 'autoReply', path: '/dashboard/auto-reply', icon: '🤖' },
   { key: 'scheduled', path: '/dashboard/scheduled', icon: '⏰' },
   { key: 'chat', path: '/dashboard/chat', icon: '💬' },
+  { key: 'blacklist', path: '/dashboard/blacklist', icon: '🚫' },
   { key: 'protection', path: '/dashboard/protection', icon: '🛡️' },
   { key: 'analytics', path: '/dashboard/analytics', icon: '📈' },
   { key: 'integrations', path: '/dashboard/integrations', icon: '🔗' },
@@ -36,6 +38,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       localStorage.removeItem('nexuswa_token');
       router.push('/login');
     });
+    // Restore theme
+    const savedTheme = localStorage.getItem('nexuswa_theme');
+    if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
   }, [router]);
 
   const handleLogout = () => { api.clearToken(); router.push('/login'); };
@@ -88,6 +93,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button className={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div className={styles.headerSpacer} />
           <div className={styles.headerActions}>
+            <button className="btn btn-ghost btn-sm" onClick={() => {
+              const html = document.documentElement;
+              const current = html.getAttribute('data-theme');
+              const next = current === 'dark' ? 'light' : 'dark';
+              html.setAttribute('data-theme', next);
+              localStorage.setItem('nexuswa_theme', next);
+            }}>
+              {typeof window !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'}
+            </button>
             <a href="/ar" className="btn btn-ghost btn-sm">عربي</a>
             <a href="/en" className="btn btn-ghost btn-sm">EN</a>
           </div>
