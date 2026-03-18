@@ -12,6 +12,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [newChatNumber, setNewChatNumber] = useState('');
+  const [chatSearch, setChatSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -101,6 +102,8 @@ export default function ChatPage() {
               <option key={i.id} value={i.id}>{i.name}</option>
             ))}
           </select>
+          <input className="input" placeholder="🔍 بحث بالرقم..." value={chatSearch}
+            onChange={e => setChatSearch(e.target.value)} style={{ marginBottom: 8, fontSize: 12 }} />
           <div style={{ display: 'flex', gap: 4 }}>
             <input className="input" placeholder="رقم جديد..." value={newChatNumber}
               onChange={e => setNewChatNumber(e.target.value)}
@@ -113,9 +116,9 @@ export default function ChatPage() {
         <div style={{ flex: 1, overflow: 'auto' }}>
           {!selectedInstance ? (
             <p style={{ padding: 20, textAlign: 'center', opacity: 0.5, fontSize: 13 }}>اختر رقم واتساب أولاً</p>
-          ) : conversations.length === 0 ? (
+          ) : conversations.filter(c => !chatSearch || c.phone.includes(chatSearch)).length === 0 ? (
             <p style={{ padding: 20, textAlign: 'center', opacity: 0.5, fontSize: 13 }}>لا توجد محادثات</p>
-          ) : conversations.map((c: any) => (
+          ) : conversations.filter(c => !chatSearch || c.phone.includes(chatSearch)).map((c: any) => (
             <div key={c.phone} onClick={() => setSelectedChat(c.phone)} style={{
               padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
               background: selectedChat === c.phone ? 'var(--bg-subtle)' : 'transparent',

@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function SettingsPage() {
   const t = useTranslations();
@@ -14,6 +15,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({ name: '', email: '' });
   const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
   const [activeTab, setActiveTab] = useState<'api' | 'profile' | 'password'>('api');
+  const { confirm, ConfirmUI } = useConfirm();
 
   useEffect(() => {
     api.listApiKeys().then(res => setApiKeys(res.data || [])).catch(() => {});
@@ -39,7 +41,8 @@ export default function SettingsPage() {
   };
 
   const handleDeleteKey = async (id: string) => {
-    if (!confirm(t('common.confirm'))) return;
+    const ok = await confirm('هل أنت متأكد من حذف هذا المفتاح؟', { title: 'حذف مفتاح API', danger: true });
+    if (!ok) return;
     try {
       await api.deleteApiKey(id);
       toast.success('تم حذف المفتاح');
@@ -177,6 +180,7 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+      {ConfirmUI}
     </div>
   );
 }

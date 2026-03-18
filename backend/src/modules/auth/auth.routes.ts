@@ -161,4 +161,55 @@ export const authRoutes = async (app: FastifyInstance) => {
       });
     }
   );
+
+  // ============================================
+  // تحديث الملف الشخصي
+  // ============================================
+  app.put(
+    '/profile',
+    { preHandler: [jwtAuthGuard] },
+    async (request, reply) => {
+      const { prisma } = await import('../../common/database');
+      const body = z.object({ name: z.string().min(2).optional() }).parse(request.body);
+
+      const updated = await prisma.user.update({
+        where: { id: request.userId },
+        data: { ...(body.name && { name: body.name }) },
+        select: { id: true, name: true, email: true, role: true },
+      });
+
+      return reply.send({ success: true, data: updated });
+    }
+  );
+
+  // ============================================
+  // تغيير كلمة المرور
+  // ============================================
+  app.post(
+    '/change-password',
+    { preHandler: [jwtAuthGuard] },
+    async (request, reply) => {
+      const { prisma } = await import('../../common/database');
+      const bcrypt = await import('bcryptjs');
+
+      const body = z.object({
+        currentPassword: z.string().min(1, 'كلمة المرور الحالية مطلوبة'),
+        newPassword: z.string().min(6, 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل'),
+      }).parse(request.body);
+
+      const user = await prisma.user.findUnique({ where: { id: request.userId } });
+      if (!user) throw new AppError('المستخدم غير موجود', 404);
+
+      const validPassword = await bcrypt.compare(body.currentPassword, user.password);
+      if (!validPassword) throw new AppError('كلمة المرور الحالية غير صحيحة', 400);
+
+      const newHash = await bcrypt.hash(body.newPassword, 12);
+      await prisma.user.update({
+        where: { id: request.userId },
+        data: { password: newHash },
+      });
+
+      return reply.send({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
+    }
+  );
 };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 const matchTypes: Record<string, string> = {
   EXACT: 'تطابق تام',
@@ -13,12 +14,18 @@ const matchTypes: Record<string, string> = {
 
 export default function AutoReplyPage() {
   const [rules, setRules] = useState<any[]>([]);
+  const [instances, setInstances] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0 });
+  const [form, setForm] = useState({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0, instanceId: '' });
+  const { confirm, ConfirmUI } = useConfirm();
 
-  useEffect(() => { loadRules(); }, []);
+  useEffect(() => { loadRules(); loadInstances(); }, []);
+
+  const loadInstances = async () => {
+    try { const res = await api.listInstances(); setInstances(res.data || []); } catch {}
+  };
 
   const loadRules = async () => {
     setLoading(true);
@@ -36,7 +43,7 @@ export default function AutoReplyPage() {
         await api.createAutoReply(form);
         toast.success('تم إنشاء القاعدة');
       }
-      setForm({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0 });
+      setForm({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0, instanceId: '' });
       setShowAdd(false);
       setEditId(null);
       loadRules();
@@ -49,13 +56,14 @@ export default function AutoReplyPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف القاعدة؟')) return;
+    const ok = await confirm('هل أنت متأكد من حذف هذه القاعدة؟', { title: 'حذف قاعدة رد تلقائي', danger: true });
+    if (!ok) return;
     try { await api.deleteAutoReply(id); toast.success('تم الحذف'); loadRules(); }
     catch (e: any) { toast.error(e.message); }
   };
 
   const handleEdit = (r: any) => {
-    setForm({ trigger: r.trigger, matchType: r.matchType, response: r.response, priority: r.priority });
+    setForm({ trigger: r.trigger, matchType: r.matchType, response: r.response, priority: r.priority, instanceId: r.instanceId || '' });
     setEditId(r.id);
     setShowAdd(true);
   };
@@ -64,7 +72,7 @@ export default function AutoReplyPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>🤖 الرد التلقائي</h1>
-        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(!showAdd); setEditId(null); setForm({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0 }); }}>
+        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(!showAdd); setEditId(null); setForm({ trigger: '', matchType: 'CONTAINS', response: '', priority: 0, instanceId: '' }); }}>
           + قاعدة جديدة
         </button>
       </div>
@@ -79,10 +87,16 @@ export default function AutoReplyPage() {
         <div className="card" style={{ marginBottom: 20, padding: 20 }}>
           <h3 style={{ marginBottom: 16 }}>{editId ? '✏️ تعديل القاعدة' : '+ قاعدة جديدة'}</h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <input className="input" placeholder='الكلمة المفتاحية (مثال: "أسعار")' value={form.trigger} onChange={e => setForm({ ...form, trigger: e.target.value })} />
             <select className="input" value={form.matchType} onChange={e => setForm({ ...form, matchType: e.target.value })}>
               {Object.entries(matchTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <select className="input" value={form.instanceId} onChange={e => setForm({ ...form, instanceId: e.target.value })}>
+              <option value="">كل الأرقام</option>
+              {instances.filter(i => i.status === 'CONNECTED').map((i: any) => (
+                <option key={i.id} value={i.id}>{i.name} {i.phoneNumber ? `(${i.phoneNumber})` : ''}</option>
+              ))}
             </select>
           </div>
 
@@ -136,6 +150,7 @@ export default function AutoReplyPage() {
           </div>
         ))}
       </div>
+      {ConfirmUI}
     </div>
   );
 }

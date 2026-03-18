@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import styles from '@/styles/components.module.css';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const navItems = [
   { key: 'dashboard', path: '/dashboard', icon: '📊' },
@@ -30,6 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState('dark');
 
   useEffect(() => {
     const token = localStorage.getItem('nexuswa_token');
@@ -39,8 +41,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/login');
     });
     // Restore theme
-    const savedTheme = localStorage.getItem('nexuswa_theme');
+    const savedTheme = localStorage.getItem('nexuswa_theme') || 'dark';
     if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+    setTheme(savedTheme);
   }, [router]);
 
   const handleLogout = () => { api.clearToken(); router.push('/login'); };
@@ -94,20 +97,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className={styles.headerSpacer} />
           <div className={styles.headerActions}>
             <button className="btn btn-ghost btn-sm" onClick={() => {
-              const html = document.documentElement;
-              const current = html.getAttribute('data-theme');
-              const next = current === 'dark' ? 'light' : 'dark';
-              html.setAttribute('data-theme', next);
+              const next = theme === 'dark' ? 'light' : 'dark';
+              document.documentElement.setAttribute('data-theme', next);
               localStorage.setItem('nexuswa_theme', next);
+              setTheme(next);
             }}>
-              {typeof window !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'}
+              {theme === 'dark' ? '☀️' : '🌙'}
             </button>
             <a href="/ar" className="btn btn-ghost btn-sm">عربي</a>
             <a href="/en" className="btn btn-ghost btn-sm">EN</a>
           </div>
         </header>
         <div className={`${styles.pageContent} animate-fade-in`}>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </div>
       </main>
 

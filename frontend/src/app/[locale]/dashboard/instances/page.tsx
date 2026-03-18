@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import styles from '@/styles/components.module.css';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function InstancesPage() {
   const t = useTranslations();
@@ -13,6 +14,7 @@ export default function InstancesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [qrModal, setQrModal] = useState<{ id: string; qr: string | null; status: string } | null>(null);
+  const { confirm, ConfirmUI } = useConfirm();
 
   const loadInstances = async () => {
     try { const res = await api.listInstances(); setInstances(res.data || []); }
@@ -55,7 +57,8 @@ export default function InstancesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('instances.confirmDelete'))) return;
+    const ok = await confirm('هل أنت متأكد من حذف هذا الرقم؟ لن يمكنك التراجع.', { title: 'حذف رقم واتساب', danger: true });
+    if (!ok) return;
     try { await api.deleteInstance(id); toast.success('تم الحذف'); loadInstances(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -129,6 +132,7 @@ export default function InstancesPage() {
           </div>
         </div>
       )}
+      {ConfirmUI}
     </div>
   );
 }

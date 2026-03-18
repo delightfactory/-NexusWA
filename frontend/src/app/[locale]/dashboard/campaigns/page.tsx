@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 const statusMap: Record<string, { label: string; bg: string; color: string }> = {
   DRAFT: { label: 'مسودة', bg: '#64748b22', color: '#64748b' },
@@ -24,6 +25,7 @@ export default function CampaignsPage() {
   const [form, setForm] = useState({
     name: '', instanceId: '', body: '', targetType: 'manual' as string, targetData: '', templateId: '',
   });
+  const { confirm, ConfirmUI } = useConfirm();
 
   useEffect(() => { loadAll(); }, []);
 
@@ -95,7 +97,8 @@ export default function CampaignsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف الحملة؟')) return;
+    const ok = await confirm('هل أنت متأكد من حذف هذه الحملة؟', { title: 'حذف حملة', danger: true });
+    if (!ok) return;
     try { await api.deleteCampaign(id); toast.success('تم الحذف'); loadAll(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -237,6 +240,7 @@ export default function CampaignsPage() {
           );
         })}
       </div>
+      {ConfirmUI}
     </div>
   );
 }

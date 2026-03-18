@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function ScheduledPage() {
   const [messages, setMessages] = useState<any[]>([]);
@@ -12,6 +13,7 @@ export default function ScheduledPage() {
   const [form, setForm] = useState({
     instanceId: '', to: '', body: '', scheduledAt: '',
   });
+  const { confirm, ConfirmUI } = useConfirm();
 
   useEffect(() => { loadAll(); }, []);
 
@@ -42,7 +44,8 @@ export default function ScheduledPage() {
   };
 
   const handleCancel = async (id: string) => {
-    if (!confirm('إلغاء هذه الرسالة المجدولة؟')) return;
+    const ok = await confirm('إلغاء هذه الرسالة المجدولة؟', { title: 'إلغاء جدولة', danger: true });
+    if (!ok) return;
     try { await api.cancelScheduled(id); toast.success('تم الإلغاء'); loadAll(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -128,6 +131,7 @@ export default function ScheduledPage() {
           );
         })}
       </div>
+      {ConfirmUI}
     </div>
   );
 }

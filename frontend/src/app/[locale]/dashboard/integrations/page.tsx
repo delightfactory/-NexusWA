@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function IntegrationsPage() {
   const [tab, setTab] = useState<'api' | 'webhooks' | 'code'>('api');
@@ -12,6 +13,7 @@ export default function IntegrationsPage() {
   const [webhookForm, setWebhookForm] = useState({ name: '', url: '', events: [] as string[] });
   const [loading, setLoading] = useState(true);
   const [apiToken, setApiToken] = useState('');
+  const { confirm, ConfirmUI } = useConfirm();
 
   const allEvents = [
     { key: 'message.received', label: 'رسالة واردة' },
@@ -53,7 +55,8 @@ export default function IntegrationsPage() {
   };
 
   const handleDeleteWebhook = async (id: string) => {
-    if (!confirm('حذف هذا الـ Webhook؟')) return;
+    const ok = await confirm('حذف هذا الـ Webhook؟ لن يمكنك التراجع.', { title: 'حذف Webhook', danger: true });
+    if (!ok) return;
     try { await api.deleteWebhook(id); toast.success('تم الحذف'); loadData(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -449,6 +452,7 @@ http_response_code(200);
           ))}
         </div>
       )}
+      {ConfirmUI}
     </div>
   );
 }

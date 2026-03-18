@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<any[]>([]);
@@ -11,6 +12,7 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', content: '', category: 'general' });
   const [preview, setPreview] = useState('');
+  const { confirm, ConfirmUI } = useConfirm();
 
   useEffect(() => { loadTemplates(); }, []);
 
@@ -44,7 +46,8 @@ export default function TemplatesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف القالب؟')) return;
+    const ok = await confirm('هل أنت متأكد من حذف هذا القالب؟', { title: 'حذف قالب', danger: true });
+    if (!ok) return;
     try { await api.deleteTemplate(id); toast.success('تم الحذف'); loadTemplates(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -128,6 +131,7 @@ export default function TemplatesPage() {
           </div>
         ))}
       </div>
+      {ConfirmUI}
     </div>
   );
 }

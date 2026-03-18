@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/components/shared';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function ContactsPage() {
   const [labelForm, setLabelForm] = useState({ name: '', color: '#6366f1' });
   const [pagination, setPagination] = useState<any>({});
   const [editId, setEditId] = useState<string | null>(null);
+  const { confirm, ConfirmUI } = useConfirm();
 
   useEffect(() => { loadContacts(); loadLabels(); }, []);
 
@@ -55,7 +57,8 @@ export default function ContactsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من الحذف؟')) return;
+    const ok = await confirm('هل أنت متأكد من حذف جهة الاتصال؟', { title: 'حذف جهة اتصال', danger: true });
+    if (!ok) return;
     try { await api.deleteContact(id); toast.success('تم الحذف'); loadContacts(); }
     catch (e: any) { toast.error(e.message); }
   };
@@ -193,6 +196,7 @@ export default function ContactsPage() {
           ))}
         </div>
       )}
+      {ConfirmUI}
     </div>
   );
 }
